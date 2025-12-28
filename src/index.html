@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>视频裁剪器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="title-block">
+          <h1>视频裁剪器</h1>
+          <p class="subtitle">离线裁剪、缩放与导出</p>
+        </div>
+        <div class="top-steps">
+          <div class="steps-title">操作流程</div>
+          <ol class="steps compact">
+            <li>拖拽或点击“选择文件”导入视频</li>
+            <li>拖动裁剪框，或选择比例与尺寸</li>
+            <li>选择输出格式</li>
+            <li>点击导出，选择保存位置</li>
+          </ol>
+        </div>
+        <div class="file-pill" id="filePill">未选择文件</div>
+      </header>
+
+      <main class="layout">
+        <div class="left-column">
+          <section class="stage">
+            <div class="stage-inner" id="stage">
+              <video id="video" muted loop playsinline></video>
+              <div class="overlay" id="overlay">
+                <div class="crop-rect" id="cropRect" aria-label="Crop area">
+                  <span class="handle nw" data-handle="nw"></span>
+                  <span class="handle ne" data-handle="ne"></span>
+                  <span class="handle sw" data-handle="sw"></span>
+                  <span class="handle se" data-handle="se"></span>
+                </div>
+              </div>
+              <div class="drop-hint" id="dropHint">
+                <div class="hint-card">
+                  <div class="hint-title">将视频文件拖到这里</div>
+                  <div class="hint-sub">或点击选择文件开始</div>
+                  <button id="openFile" class="primary">选择文件</button>
+                </div>
+              </div>
+            </div>
+            <div class="stage-footer">
+              <button id="togglePlay" class="ghost">播放</button>
+              <button id="resetCrop" class="ghost">重置裁剪</button>
+            </div>
+          </section>
+          <section class="panel-card stage-actions">
+            <div class="actions">
+              <button id="exportBtn" class="primary">导出</button>
+              <button id="openFileAlt" class="ghost">重新选择</button>
+            </div>
+            <div class="status" id="status"></div>
+          </section>
+        </div>
+
+        <aside class="panel">
+          <section class="panel-card">
+            <h3>预览</h3>
+            <div class="preview-wrap">
+              <canvas id="previewCanvas"></canvas>
+              <div class="preview-meta" id="previewMeta">暂无视频</div>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <h3>比例</h3>
+            <div class="ratio-grid" id="ratioGrid">
+              <button data-ratio="source" class="active">原比例</button>
+              <button data-ratio="16:9">16:9</button>
+              <button data-ratio="9:16">9:16</button>
+              <button data-ratio="4:3">4:3</button>
+              <button data-ratio="1:1">1:1</button>
+              <button data-ratio="custom">自定义</button>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="panel-title-row">
+              <h3>输出尺寸</h3>
+              <button id="lockRatio" class="ghost small" data-locked="true">
+                锁定比例
+              </button>
+            </div>
+            <div class="dim-grid">
+              <div class="dim-field">
+                <label for="outWidth">宽度 (px)</label>
+                <input id="outWidth" type="number" min="2" step="2" />
+              </div>
+              <div class="dim-field">
+                <label for="outHeight">高度 (px)</label>
+                <input id="outHeight" type="number" min="2" step="2" />
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <h3>输出格式</h3>
+            <div class="format-row" id="formatRow">
+              <button data-format="mp4" class="active">MP4</button>
+              <button data-format="webm">WebM</button>
+              <button data-format="mov">MOV</button>
+              <button data-format="avi">AVI</button>
+              <button data-format="mkv">MKV</button>
+            </div>
+          </section>
+          <details class="debug-panel" id="debugPanel" hidden>
+            <summary>调试日志</summary>
+            <pre id="debugLog"></pre>
+          </details>
+          <button id="toggleDebug" class="ghost debug-toggle">显示调试日志</button>
+        </aside>
+      </main>
+    </div>
+
+    <div class="busy" id="busy" hidden>
+      <div class="busy-card">处理中...</div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
