@@ -76,6 +76,47 @@
             </div>
           </section>
 
+          <section class="panel-card trim-panel">
+            <div class="panel-title-row">
+              <h3>截取</h3>
+              <button id="resetTrim" class="ghost small">重置截取</button>
+            </div>
+            <div class="trim-track" id="trimTrack">
+              <div class="trim-range" id="trimRange"></div>
+              <input
+                id="trimStartRange"
+                class="trim-slider"
+                type="range"
+                min="0"
+                max="0"
+                step="0.1"
+                value="0"
+                aria-label="开始时间"
+              />
+              <input
+                id="trimEndRange"
+                class="trim-slider"
+                type="range"
+                min="0"
+                max="0"
+                step="0.1"
+                value="0"
+                aria-label="结束时间"
+              />
+            </div>
+            <div class="trim-fields">
+              <div class="trim-field">
+                <label for="trimStartInput">开始</label>
+                <input id="trimStartInput" type="text" inputmode="decimal" />
+              </div>
+              <div class="trim-field">
+                <label for="trimEndInput">结束</label>
+                <input id="trimEndInput" type="text" inputmode="decimal" />
+              </div>
+            </div>
+            <div class="trim-meta" id="trimMeta">总时长 --:--</div>
+          </section>
+
           <section class="panel-card">
             <h3>比例</h3>
             <div class="ratio-grid" id="ratioGrid">

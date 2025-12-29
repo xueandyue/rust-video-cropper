@@ -75,6 +75,14 @@ const outHeightInput = document.getElementById("outHeight");
 const lockRatioBtn = document.getElementById("lockRatio");
 const previewCanvas = document.getElementById("previewCanvas");
 const previewMeta = document.getElementById("previewMeta");
+const trimTrack = document.getElementById("trimTrack");
+const trimRange = document.getElementById("trimRange");
+const trimStartRange = document.getElementById("trimStartRange");
+const trimEndRange = document.getElementById("trimEndRange");
+const trimStartInput = document.getElementById("trimStartInput");
+const trimEndInput = document.getElementById("trimEndInput");
+const trimMeta = document.getElementById("trimMeta");
+const resetTrimBtn = document.getElementById("resetTrim");
 const statusEl = document.getElementById("status");
 const busyEl = document.getElementById("busy");
 const togglePlayBtn = document.getElementById("togglePlay");
@@ -94,6 +102,8 @@ const state = {
   inputPath: null,
   videoWidth: 0,
   videoHeight: 0,
+  duration: 0,
+  trim: { start: 0, end: 0 },
   cropSrc: { x: 0, y: 0, w: 0, h: 0 },
   display: { scale: 1, w: 0, h: 0, offsetX: 0, offsetY: 0 },
   output: { w: 640, h: 360, format: "mp4" },
@@ -104,6 +114,7 @@ const state = {
 };
 
 const MIN_CROP_PX = 36;
+const TRIM_STEP = 0.1;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -114,6 +125,49 @@ function roundEven(value) {
   return safe - (safe % 2);
 }
 
+function padNumber(value, length) {
+  return String(value).padStart(length, "0");
+}
+
+function formatTimecode(seconds) {
+  if (!Number.isFinite(seconds)) return "--:--";
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const ms = totalMs % 1000;
+  const totalSec = Math.floor(totalMs / 1000);
+  const sec = totalSec % 60;
+  const totalMin = Math.floor(totalSec / 60);
+  const min = totalMin % 60;
+  const hour = Math.floor(totalMin / 60);
+  return `${padNumber(hour, 2)}:${padNumber(min, 2)}:${padNumber(sec, 2)}.${padNumber(ms, 3)}`;
+}
+
+function parseTimecode(value) {
+  if (!value) return NaN;
+  const text = String(value).trim();
+  if (!text) return NaN;
+  if (text.includes(":")) {
+    const parts = text.split(":");
+    if (parts.length > 3) return NaN;
+    let h = 0;
+    let m = 0;
+    let s = 0;
+    if (parts.length === 3) {
+      h = parseFloat(parts[0]);
+      m = parseFloat(parts[1]);
+      s = parseFloat(parts[2]);
+    } else {
+      m = parseFloat(parts[0]);
+      s = parseFloat(parts[1]);
+    }
+    if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) {
+      return NaN;
+    }
+    return h * 3600 + m * 60 + s;
+  }
+  const seconds = parseFloat(text);
+  return Number.isFinite(seconds) ? seconds : NaN;
+}
+
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.style.color = isError ? "#c2411c" : "";
@@ -121,6 +175,116 @@ function setStatus(message, isError = false) {
 
 function setBusy(isBusy) {
   busyEl.hidden = !isBusy;
+}
+
+function setTrimEnabled(enabled) {
+  [trimStartRange, trimEndRange, trimStartInput, trimEndInput, resetTrimBtn].forEach(
+    (el) => {
+      if (!el) return;
+      el.disabled = !enabled;
+    }
+  );
+}
+
+function updateTrimUI() {
+  if (!trimStartRange || !trimEndRange) return;
+  const duration = state.duration;
+  if (!Number.isFinite(duration) || duration <= 0) {
+    trimStartRange.min = "0";
+    trimStartRange.max = "0";
+    trimStartRange.value = "0";
+    trimEndRange.min = "0";
+    trimEndRange.max = "0";
+    trimEndRange.value = "0";
+    if (trimStartInput) trimStartInput.value = "00:00:00.000";
+    if (trimEndInput) trimEndInput.value = "00:00:00.000";
+    if (trimRange) {
+      trimRange.style.left = "0%";
+      trimRange.style.width = "0%";
+    }
+    if (trimMeta) trimMeta.textContent = "总时长 --:--";
+    setTrimEnabled(false);
+    return;
+  }
+
+  const minGap = Math.min(TRIM_STEP, duration);
+  let start = clamp(state.trim.start, 0, duration);
+  let end = clamp(state.trim.end, 0, duration);
+  if (end - start < minGap) {
+    if (start + minGap <= duration) {
+      end = start + minGap;
+    } else {
+      start = Math.max(0, end - minGap);
+    }
+  }
+
+  state.trim.start = start;
+  state.trim.end = end;
+
+  trimStartRange.min = "0";
+  trimStartRange.max = String(duration);
+  trimStartRange.step = String(TRIM_STEP);
+  trimStartRange.value = start.toFixed(3);
+  trimEndRange.min = "0";
+  trimEndRange.max = String(duration);
+  trimEndRange.step = String(TRIM_STEP);
+  trimEndRange.value = end.toFixed(3);
+
+  if (trimStartInput) trimStartInput.value = formatTimecode(start);
+  if (trimEndInput) trimEndInput.value = formatTimecode(end);
+
+  if (trimRange) {
+    const startPct = (start / duration) * 100;
+    const endPct = (end / duration) * 100;
+    trimRange.style.left = `${startPct}%`;
+    trimRange.style.width = `${Math.max(0, endPct - startPct)}%`;
+  }
+  if (trimMeta) {
+    trimMeta.textContent = `总时长 ${formatTimecode(duration)} · 截取 ${formatTimecode(start)} - ${formatTimecode(end)}`;
+  }
+  setTrimEnabled(true);
+}
+
+function resetTrimToFull() {
+  if (!Number.isFinite(state.duration) || state.duration <= 0) return;
+  state.trim.start = 0;
+  state.trim.end = state.duration;
+  updateTrimUI();
+}
+
+function setTrimStart(value) {
+  if (!Number.isFinite(state.duration) || state.duration <= 0) return;
+  const minGap = Math.min(TRIM_STEP, state.duration);
+  let start = clamp(value, 0, state.duration);
+  let end = state.trim.end;
+  if (end - start < minGap) {
+    start = Math.max(0, end - minGap);
+  }
+  state.trim.start = start;
+  updateTrimUI();
+}
+
+function setTrimEnd(value) {
+  if (!Number.isFinite(state.duration) || state.duration <= 0) return;
+  const minGap = Math.min(TRIM_STEP, state.duration);
+  let end = clamp(value, 0, state.duration);
+  let start = state.trim.start;
+  if (end - start < minGap) {
+    end = Math.min(state.duration, start + minGap);
+  }
+  state.trim.end = end;
+  updateTrimUI();
+}
+
+function getTrimPayload() {
+  if (!Number.isFinite(state.duration) || state.duration <= 0) return null;
+  const start = state.trim.start;
+  const end = state.trim.end;
+  const epsilon = 0.001;
+  if (Math.abs(start) <= epsilon && Math.abs(end - state.duration) <= epsilon) {
+    return null;
+  }
+  return { start, end };
 }
 
 function updateFilePill(path) {
@@ -348,6 +512,9 @@ function loadVideoFromFile(file) {
   if (!file) return;
   state.inputPath = file.path || null;
   state.previewOnly = !state.inputPath;
+  state.duration = 0;
+  state.trim = { start: 0, end: 0 };
+  updateTrimUI();
   debug("loadVideoFromFile", {
     name: file.name,
     path: file.path || null,
@@ -365,6 +532,9 @@ async function loadVideoFromPath(path) {
   state.inputPath = path;
   state.previewOnly = false;
   setStatus("");
+  state.duration = 0;
+  state.trim = { start: 0, end: 0 };
+  updateTrimUI();
   debug("loadVideoFromPath", path);
   const src = convertFileSrc ? convertFileSrc(path) : path;
   video.src = src;
@@ -600,6 +770,56 @@ resetCropBtn.addEventListener("click", () => {
   resetCropToFull();
 });
 
+if (trimStartRange) {
+  trimStartRange.addEventListener("input", () => {
+    const value = parseFloat(trimStartRange.value);
+    if (Number.isFinite(value)) {
+      setTrimStart(value);
+    }
+  });
+}
+
+if (trimEndRange) {
+  trimEndRange.addEventListener("input", () => {
+    const value = parseFloat(trimEndRange.value);
+    if (Number.isFinite(value)) {
+      setTrimEnd(value);
+    }
+  });
+}
+
+if (trimStartInput) {
+  const commitStartInput = () => {
+    const value = parseTimecode(trimStartInput.value);
+    if (Number.isFinite(value)) {
+      setTrimStart(value);
+    } else {
+      updateTrimUI();
+    }
+  };
+  trimStartInput.addEventListener("change", commitStartInput);
+  trimStartInput.addEventListener("blur", commitStartInput);
+}
+
+if (trimEndInput) {
+  const commitEndInput = () => {
+    const value = parseTimecode(trimEndInput.value);
+    if (Number.isFinite(value)) {
+      setTrimEnd(value);
+    } else {
+      updateTrimUI();
+    }
+  };
+  trimEndInput.addEventListener("change", commitEndInput);
+  trimEndInput.addEventListener("blur", commitEndInput);
+}
+
+if (resetTrimBtn) {
+  resetTrimBtn.addEventListener("click", () => {
+    resetTrimToFull();
+  });
+}
+
 openFileBtn.addEventListener("click", chooseFile);
 openFileAltBtn.addEventListener("click", chooseFile);
 
@@ -632,7 +852,8 @@ exportBtn.addEventListener("click", async () => {
 
   setBusy(true);
   setStatus("正在导出...");
-  debug("export start", { outputPath, crop: state.cropSrc, output: state.output });
+  const trim = getTrimPayload();
+  debug("export start", { outputPath, crop: state.cropSrc, output: state.output, trim });
 
   const crop = {
     x: Math.round(state.cropSrc.x),
@@ -653,7 +874,8 @@ exportBtn.addEventListener("click", async () => {
         input_path: state.inputPath,
         output_path: outputPath,
         crop,
-        output
+        output,
+        trim
       }
     });
     setStatus("导出完成。");
@@ -687,10 +909,14 @@ fileInput.addEventListener("change", (event) => {
 video.addEventListener("loadedmetadata", () => {
   state.videoWidth = video.videoWidth;
   state.videoHeight = video.videoHeight;
+  state.duration = Number.isFinite(video.duration) ? video.duration : 0;
+  state.trim.start = 0;
+  state.trim.end = state.duration;
   dropHint.style.display = "none";
   overlay.style.display = "block";
   togglePlayBtn.textContent = "暂停";
   applySourceDefaults();
+  updateTrimUI();
   renderCropOverlay();
   updatePreviewCanvasSize();
   video.play();
@@ -799,6 +1025,7 @@ updateRatioButtons();
 updateFormatButtons();
 updateLockButton();
 updateOutputInputs();
+updateTrimUI();
 updatePreviewCanvasSize();
 renderCropOverlay();
 startPreviewLoop();

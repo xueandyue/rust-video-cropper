@@ -11,6 +11,7 @@ struct CropRequest {
     output_path: String,
     crop: CropRect,
     output: OutputSettings,
+    trim: Option<TrimRange>,
 }
 
 #[derive(Deserialize)]
@@ -26,6 +27,12 @@ struct OutputSettings {
     width: u32,
     height: u32,
     format: String,
+}
+
+#[derive(Deserialize)]
+struct TrimRange {
+    start: f64,
+    end: f64,
 }
 
 #[tauri::command]
@@ -55,10 +62,22 @@ fn crop_video(app: tauri::AppHandle, req: CropRequest) -> Result<(), String> {
     );
 
     let mut cmd = Command::new(ffmpeg_path);
-    cmd.arg("-y")
-        .arg("-i")
-        .arg(&req.input_path)
-        .args(["-map", "0:v:0", "-map", "0:a?"])
+    cmd.arg("-y");
+    if let Some(trim) = &req.trim {
+        let start = trim.start.max(0.0);
+        let end = trim.end.max(start);
+        let duration = end - start;
+        if duration <= 0.0 {
+            return Err("Trim duration must be greater than 0.".to_string());
+        }
+        cmd.arg("-ss").arg(format!("{:.3}", start));
+        cmd.arg("-i").arg(&req.input_path);
+        cmd.arg("-t").arg(format!("{:.3}", duration));
+    } else {
+        cmd.arg("-i").arg(&req.input_path);
+    }
+
+    cmd.args(["-map", "0:v:0", "-map", "0:a?"])
         .args(["-vf", &filter]);
 
     apply_format_args(&mut cmd, &format);
