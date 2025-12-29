@@ -389,13 +389,30 @@ function moveRect(rect, dx, dy, bounds) {
 }
 
 function resizeRect(rect, handle, dx, dy, bounds, ratio) {
-  const anchorX = handle.includes("w") ? rect.x + rect.w : rect.x;
-  const anchorY = handle.includes("n") ? rect.y + rect.h : rect.y;
-  let newW = rect.w + (handle.includes("e") ? dx : -dx);
-  let newH = rect.h + (handle.includes("s") ? dy : -dy);
+  const hasW = handle.includes("w");
+  const hasE = handle.includes("e");
+  const hasN = handle.includes("n");
+  const hasS = handle.includes("s");
+  const resizeX = hasW || hasE;
+  const resizeY = hasN || hasS;
+  const useRatio = ratio && resizeX && resizeY;
+  const widthDriven = useRatio && Math.abs(dx) > Math.abs(dy);
 
-  if (ratio) {
-    if (Math.abs(dx) > Math.abs(dy)) {
+  const anchorX = hasW ? rect.x + rect.w : rect.x;
+  const anchorY = hasN ? rect.y + rect.h : rect.y;
+
+  let newW = rect.w;
+  let newH = rect.h;
+
+  if (resizeX) {
+    newW = rect.w + (hasE ? dx : -dx);
+  }
+  if (resizeY) {
+    newH = rect.h + (hasS ? dy : -dy);
+  }
+
+  if (useRatio) {
+    if (widthDriven) {
       newH = newW / ratio;
     } else {
       newW = newH * ratio;
@@ -405,14 +422,18 @@ function resizeRect(rect, handle, dx, dy, bounds, ratio) {
   newW = Math.max(newW, MIN_CROP_PX);
   newH = Math.max(newH, MIN_CROP_PX);
 
-  let maxW = handle.includes("w")
-    ? anchorX - bounds.x
-    : bounds.x + bounds.w - anchorX;
-  let maxH = handle.includes("n")
-    ? anchorY - bounds.y
-    : bounds.y + bounds.h - anchorY;
+  let maxW = resizeX
+    ? hasW
+      ? anchorX - bounds.x
+      : bounds.x + bounds.w - anchorX
+    : rect.w;
+  let maxH = resizeY
+    ? hasN
+      ? anchorY - bounds.y
+      : bounds.y + bounds.h - anchorY
+    : rect.h;
 
-  if (ratio) {
+  if (useRatio) {
     if (maxW / maxH > ratio) {
       maxW = maxH * ratio;
     } else {
@@ -420,11 +441,23 @@ function resizeRect(rect, handle, dx, dy, bounds, ratio) {
     }
   }
 
-  newW = Math.min(newW, maxW);
-  newH = ratio ? newW / ratio : Math.min(newH, maxH);
+  if (resizeX) {
+    newW = Math.min(newW, maxW);
+  }
+  if (resizeY) {
+    newH = Math.min(newH, maxH);
+  }
 
-  const x = handle.includes("w") ? anchorX - newW : anchorX;
-  const y = handle.includes("n") ? anchorY - newH : anchorY;
+  if (useRatio) {
+    if (widthDriven) {
+      newH = newW / ratio;
+    } else {
+      newW = newH * ratio;
+    }
+  }
+
+  const x = resizeX ? (hasW ? anchorX - newW : anchorX) : rect.x;
+  const y = resizeY ? (hasN ? anchorY - newH : anchorY) : rect.y;
   return { x, y, w: newW, h: newH };
 }
 
@@ -706,14 +739,18 @@ if (listen) {
     return null;
   };
 
-  listen("tauri://file-drop", (event) => {
-    debug("tauri file-drop event", event.payload);
-    const path = extractDropPath(event.payload);
-    debug("tauri file-drop normalized path", path);
-    if (path) {
-      loadVideoFromPath(path);
-    }
-  });
+  const handleTauriDrop = (eventName) =>
+    listen(eventName, (event) => {
+      debug(`${eventName} event`, event.payload);
+      const path = extractDropPath(event.payload);
+      debug(`${eventName} normalized path`, path);
+      if (path) {
+        loadVideoFromPath(path);
+      }
+    });
+
+  handleTauriDrop("tauri://drag-drop");
+  handleTauriDrop("tauri://file-drop");
 }
 
 async function openDialogNative(options) {
