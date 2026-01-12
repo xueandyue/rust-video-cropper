@@ -57,8 +57,13 @@ fn crop_video(app: tauri::AppHandle, req: CropRequest) -> Result<(), String> {
     }
 
     let filter = format!(
-        "crop={}:{}:{}:{},scale={}:{}",
-        crop.width, crop.height, crop.x, crop.y, out.width, out.height
+        "crop=w=min({cw}\\,in_w):h=min({ch}\\,in_h):x=min(max({cx}\\,0)\\,in_w-min({cw}\\,in_w)):y=min(max({cy}\\,0)\\,in_h-min({ch}\\,in_h)),scale={ow}:{oh}",
+        cw = crop.width,
+        ch = crop.height,
+        cx = crop.x,
+        cy = crop.y,
+        ow = out.width,
+        oh = out.height
     );
 
     let mut cmd = Command::new(ffmpeg_path);
