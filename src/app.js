@@ -90,6 +90,10 @@ const resetCropBtn = document.getElementById("resetCrop");
 const openFileBtn = document.getElementById("openFile");
 const openFileAltBtn = document.getElementById("openFileAlt");
 const exportBtn = document.getElementById("exportBtn");
+const progressRange = document.getElementById("progressRange");
+const progressCurrent = document.getElementById("progressCurrent");
+const progressDuration = document.getElementById("progressDuration");
+const toggleSoundBtn = document.getElementById("toggleSound");
 
 const previewCtx = previewCanvas.getContext("2d");
 const fileInput = document.createElement("input");
@@ -110,11 +114,13 @@ const state = {
   ratioMode: "source",
   lockRatio: true,
   previewSize: { cssW: 240, cssH: 135, dpr: 1 },
-  previewOnly: false
+  previewOnly: false,
+  muted: true
 };
 
 const MIN_CROP_PX = 36;
 const TRIM_STEP = 0.1;
+let isSeekingPlayback = false;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -175,6 +181,18 @@ function setStatus(message, isError = false) {
 
 function setBusy(isBusy) {
   busyEl.hidden = !isBusy;
+}
+
+function updateSoundButton() {
+  if (!toggleSoundBtn) return;
+  toggleSoundBtn.dataset.muted = state.muted ? "true" : "false";
+  toggleSoundBtn.textContent = state.muted ? "开启声音" : "静音";
+}
+
+function applyMuteState() {
+  if (!video) return;
+  video.muted = state.muted;
+  updateSoundButton();
 }
 
 function setTrimEnabled(enabled) {
@@ -481,6 +499,64 @@ function renderPreview() {
   );
 }
 
+function getPlaybackDuration() {
+  if (Number.isFinite(state.duration) && state.duration > 0) {
+    return state.duration;
+  }
+  if (Number.isFinite(video.duration) && video.duration > 0) {
+    return video.duration;
+  }
+  return 0;
+}
+
+function updatePlaybackMeta(currentTime, duration) {
+  if (progressCurrent) {
+    const safeTime = Math.max(0, Number.isFinite(currentTime) ? currentTime : 0);
+    progressCurrent.textContent = formatTimecode(safeTime);
+  }
+  if (progressDuration) {
+    progressDuration.textContent =
+      duration > 0 ? formatTimecode(duration) : "--:--";
+  }
+}
+
+function updatePlaybackUI(currentTime = video.currentTime) {
+  if (!progressRange) return;
+  const duration = getPlaybackDuration();
+  const hasDuration = duration > 0;
+
+  if (!hasDuration) {
+    progressRange.disabled = true;
+    progressRange.max = "0";
+    progressRange.value = "0";
+    progressRange.style.setProperty("--progress", "0%");
+    updatePlaybackMeta(0, 0);
+    return;
+  }
+
+  progressRange.disabled = false;
+  progressRange.max = String(duration);
+  const safeTime = clamp(currentTime, 0, duration);
+  let readoutTime = safeTime;
+
+  if (isSeekingPlayback) {
+    const draggingValue = clamp(
+      Number.isFinite(parseFloat(progressRange.value))
+        ? parseFloat(progressRange.value)
+        : safeTime,
+      0,
+      duration
+    );
+    readoutTime = draggingValue;
+  } else {
+    progressRange.value = String(safeTime);
+  }
+
+  updatePlaybackMeta(readoutTime, duration);
+  const percent = duration > 0 ? (readoutTime / duration) * 100 : 0;
+  progressRange.style.setProperty("--progress", `${percent}%`);
+}
+
 function startPreviewLoop() {
   function tick() {
     renderPreview();
@@ -515,6 +591,7 @@ function loadVideoFromFile(file) {
   state.duration = 0;
   state.trim = { start: 0, end: 0 };
   updateTrimUI();
+  updatePlaybackUI(0);
   debug("loadVideoFromFile", {
     name: file.name,
     path: file.path || null,
@@ -535,6 +612,7 @@ async function loadVideoFromPath(path) {
   state.duration = 0;
   state.trim = { start: 0, end: 0 };
   updateTrimUI();
+  updatePlaybackUI(0);
   debug("loadVideoFromPath", path);
   const src = convertFileSrc ? convertFileSrc(path) : path;
   video.src = src;
@@ -820,6 +898,38 @@ if (resetTrimBtn) {
   });
 }
 
+if (progressRange) {
+  const stopSeekingPlayback = () => {
+    isSeekingPlayback = false;
+    updatePlaybackUI();
+  };
+  progressRange.addEventListener("pointerdown", () => {
+    isSeekingPlayback = true;
+  });
+  progressRange.addEventListener("input", () => {
+    const duration = getPlaybackDuration();
+    if (duration <= 0) return;
+    isSeekingPlayback = true;
+    const value = clamp(parseFloat(progressRange.value), 0, duration);
+    if (!Number.isFinite(value)) return;
+    video.currentTime = value;
+    updatePlaybackMeta(value, duration);
+    progressRange.value = String(value);
+    const percent = duration > 0 ? (value / duration) * 100 : 0;
+    progressRange.style.setProperty("--progress", `${percent}%`);
+  });
+  ["pointerup", "pointercancel", "change", "blur"].forEach((eventName) =>
+    progressRange.addEventListener(eventName, stopSeekingPlayback)
+  );
+}
+
+if (toggleSoundBtn) {
+  toggleSoundBtn.addEventListener("click", () => {
+    state.muted = !state.muted;
+    applyMuteState();
+  });
+}
+
 openFileBtn.addEventListener("click", chooseFile);
 openFileAltBtn.addEventListener("click", chooseFile);
 
@@ -906,20 +1016,21 @@ fileInput.addEventListener("change", (event) => {
   loadVideoFromFile(file);
 });
 
-video.addEventListener("loadedmetadata", () => {
-  state.videoWidth = video.videoWidth;
-  state.videoHeight = video.videoHeight;
-  state.duration = Number.isFinite(video.duration) ? video.duration : 0;
-  state.trim.start = 0;
-  state.trim.end = state.duration;
-  dropHint.style.display = "none";
-  overlay.style.display = "block";
-  togglePlayBtn.textContent = "暂停";
-  applySourceDefaults();
-  updateTrimUI();
-  renderCropOverlay();
-  updatePreviewCanvasSize();
-  video.play();
+  video.addEventListener("loadedmetadata", () => {
+    state.videoWidth = video.videoWidth;
+    state.videoHeight = video.videoHeight;
+    state.duration = Number.isFinite(video.duration) ? video.duration : 0;
+    state.trim.start = 0;
+    state.trim.end = state.duration;
+    dropHint.style.display = "none";
+    overlay.style.display = "block";
+    togglePlayBtn.textContent = "暂停";
+    applySourceDefaults();
+    updateTrimUI();
+    renderCropOverlay();
+    updatePreviewCanvasSize();
+    updatePlaybackUI();
+    video.play();
   debug("video loadedmetadata", {
     width: state.videoWidth,
     height: state.videoHeight,
@@ -943,6 +1054,18 @@ video.addEventListener("error", () => {
   const code = video.error ? video.error.code : null;
   debug("video error", { code, src: video.currentSrc });
   setStatus("视频加载失败，请换一种导入方式或文件格式。", true);
+});
+
+video.addEventListener("timeupdate", () => {
+  updatePlaybackUI();
+});
+
+video.addEventListener("seeked", () => {
+  updatePlaybackUI();
+});
+
+video.addEventListener("durationchange", () => {
+  updatePlaybackUI();
 });
 
 window.addEventListener("resize", () => {
@@ -1028,4 +1151,6 @@ updateOutputInputs();
 updateTrimUI();
 updatePreviewCanvasSize();
 renderCropOverlay();
+applyMuteState();
+updatePlaybackUI();
 startPreviewLoop();

@@ -118,6 +118,59 @@ h1 {
   height: clamp(360px, 60vh, 640px);
 }
 
+.playback-bar {
+  padding: 10px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.progress-range {
+  width: 100%;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  --progress: 0%;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0,
+    var(--accent) var(--progress),
+    rgba(255, 255, 255, 0.15) var(--progress),
+    rgba(255, 255, 255, 0.15) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.progress-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  margin-top: -4px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.progress-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.playback-meta {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+}
+
 video {
   width: 100%;
   height: 100%;

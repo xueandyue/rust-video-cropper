@@ -53,8 +53,25 @@
                 </div>
               </div>
             </div>
+            <div class="playback-bar">
+              <input
+                id="progressRange"
+                class="progress-range"
+                type="range"
+                min="0"
+                max="0"
+                step="0.01"
+                value="0"
+                aria-label="播放进度"
+              />
+              <div class="playback-meta">
+                <span id="progressCurrent">00:00:00.000</span>
+                <span id="progressDuration">--:--</span>
+              </div>
+            </div>
             <div class="stage-footer">
               <button id="togglePlay" class="ghost">播放</button>
+              <button id="toggleSound" class="ghost small" data-muted="true">开启声音</button>
               <button id="resetCrop" class="ghost">重置裁剪</button>
             </div>
           </section>
